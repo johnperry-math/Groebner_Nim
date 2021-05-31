@@ -18,11 +18,11 @@ data class Stick(private val _p: Point, private val _q: Point) {
     constructor(x1: Int, y1: Int, x2: Int, y2: Int): this(Point(x1, y1), Point(x2, y2))
 
     /**
-     * determines the distinguished point according to the given ordering
+     * determines the head according to the given ordering
      * @see [ord].[Ordering.preference]
-     * @param ord hwo to identify the distinguished point
+     * @param ord how to identify the head
      */
-    fun distinguished_point(ord: Ordering = GrevLex_Ordering) = ord.preference(p, q)
+    fun head(ord: Ordering = GrevLex_Ordering) = ord.preference(p, q)
 
     /**
      * overrides the dollar-sign operator to display "[ P ; Q ]"
@@ -51,22 +51,22 @@ data class Stick(private val _p: Point, private val _q: Point) {
 
 /**
  * creates a new [Stick] by moving the given sticks rightwards or upwards
- * until their distinguished [Point]s meet, then returns the non-distinguished [Point]s
+ * until their heads meet, then returns the tails
  * @param s1 first [Stick] to combine
  * @param s2 second [Stick] to combine
- * @param ord how to determine a distinguished [Point]
+ * @param ord how to determine a head
  */
 fun new_stick(s1: Stick, s2: Stick, ord: Ordering): Stick {
 
-    // determine distinguished (l) and non-distinguished (t) points
-    val (l1, t1) = if (s1.distinguished_point(ord) == s1.p) Pair(s1.p, s1.q) else Pair(s1.q, s1.p)
-    val (l2, t2) = if (s2.distinguished_point(ord) == s2.p) Pair(s2.p, s2.q) else Pair(s2.q, s2.p)
+    // determine head (h) and tail (t) points
+    val (h1, t1) = if (s1.head(ord) == s1.p) Pair(s1.p, s1.q) else Pair(s1.q, s1.p)
+    val (h2, t2) = if (s2.head(ord) == s2.p) Pair(s2.p, s2.q) else Pair(s2.q, s2.p)
     // find where they meet when you move the sticks upwards or rightwards
-    val lcm = Point(max(l1.x,l2.x), max(l1.y,l2.y))
+    val lcm = Point(max(h1.x,h2.x), max(h1.y,h2.y))
     // how far does each move to get there?
-    val u1 = Point(lcm.x - l1.x, lcm.y - l1.y)
-    val u2 = Point(lcm.x - l2.x, lcm.y - l2.y)
-    // join the non-distinguished points
+    val u1 = Point(lcm.x - h1.x, lcm.y - h1.y)
+    val u2 = Point(lcm.x - h2.x, lcm.y - h2.y)
+    // join the tails
     return Stick( Point(t1.x + u1.x, t1.y + u1.y), Point(t2.x + u2.x, t2.y + u2.y) )
 
 }
@@ -74,11 +74,11 @@ fun new_stick(s1: Stick, s2: Stick, ord: Ordering): Stick {
 /**
  * reduce a given [Stick] by an [Iterable] of [Stick]s, according to an [Ordering]
  *
- * whenever a distinguished point of [by] is southwest of either of [stick]'s points,
+ * whenever a head of [by] is southwest of either of [stick]'s points,
  * we move that reducer to meet [stick]'s said point, then combine the remaining points.
  * @param stick the stick to reduce
  * @param by [Stick]s to reduce by
- * @param ord how to determine a [Stick]'s distinguished [Point]
+ * @param ord how to determine a [Stick]'s head
  */
 fun reduce(stick: Stick, by: Iterable<Stick>, ord: Ordering): Stick {
 
@@ -91,22 +91,22 @@ fun reduce(stick: Stick, by: Iterable<Stick>, ord: Ordering): Stick {
         if (result.p == result.q) break
 
         // indicates whether a reducer we've discovered
-        // reduces result's distinguished point, or the other one
-        var reduce_lead = true
+        // reduces result's head, or the other one
+        var reduce_head = true
         // can we find a reducer for result.p?
-        var reducer = by.find { it.distinguished_point(ord).is_southwest_of(result.p) }
+        var reducer = by.find { it.head(ord).is_southwest_of(result.p) }
         // if not, can we find one for result.q? make a note of that if so
         if (reducer == null) {
-            reduce_lead = false
-            reducer = by.find { it.distinguished_point(ord).is_southwest_of(result.q) }
+            reduce_head = false
+            reducer = by.find { it.head(ord).is_southwest_of(result.q) }
         }
         if (reducer == null) break // no reducer found
         else { // we have a reducer!
-            val t = reducer.distinguished_point(ord)
-            val u = if (reduce_lead) Point(result.p.x - t.x, result.p.y - t.y)
+            val t = reducer.head(ord)
+            val u = if (reduce_head) Point(result.p.x - t.x, result.p.y - t.y)
                     else Point(result.q.x - t.x, result.q.y - t.y)
             val v = if (t === reducer.p) reducer.q else reducer.p
-            result = if (reduce_lead) Stick( result.q , u + v ) else Stick( result.p , u + v )
+            result = if (reduce_head) Stick( result.q , u + v ) else Stick( result.p , u + v )
         }
 
     } while (true)
@@ -116,18 +116,18 @@ fun reduce(stick: Stick, by: Iterable<Stick>, ord: Ordering): Stick {
 }
 
 /**
- * remove the pairs that correspond to elements whose distinguished [Point]s
+ * remove the pairs that correspond to elements whose heads
  * lie on opposite axes; in the context of Groebner bases, this is sometimes
  * called Buchberger's first criterion, or, Buchberger's gcd criterion
  * @param pairs a list of paired elements of [basis]
  * @param basis a list of [Stick]s that defines a basis of the game
- * @param ord how we determine a [Stick]'s distinguished [Point]
+ * @param ord how we determine a [Stick]'s head
  */
 fun prune_gcd(pairs: MutableSet<Pair<Int, Int>>, basis: List<Stick>, ord: Ordering) {
     val b1_pairs = HashSet<Pair<Int, Int>>()
     for (p in pairs) {
-        val t1 = basis[p.first].distinguished_point(ord)
-        val t2 = basis[p.second].distinguished_point(ord)
+        val t1 = basis[p.first].head(ord)
+        val t2 = basis[p.second].head(ord)
         if ( (t1.x == 0 && t2.y == 0) || (t1.y == 0 && t2.x == 0) ) {
             b1_pairs.add(p)
             console.log("b1 pruned ${p.first}, ${p.second}")
@@ -146,11 +146,11 @@ fun prune_lcm(
     for (p in pairs) {
         val i = p.first
         val j = p.second
-        val t1 = basis[i].distinguished_point(ord)
-        val t2 = basis[j].distinguished_point(ord)
+        val t1 = basis[i].head(ord)
+        val t2 = basis[j].head(ord)
         val t12 = Point( max(t1.x, t2.x) , max(t1.y, t2.y) )
         for (k in basis.indices) {
-            val u = basis[k].distinguished_point(ord)
+            val u = basis[k].head(ord)
             if (
                 u.is_southwest_of(t12)
                 && (Pair(i,k) in considered_pairs || Pair(k,i) in considered_pairs)
@@ -170,7 +170,7 @@ fun prune_lcm(
  * technically, this is computing a Groebner basis of a polynomial ideal
  *
  * @param input the initial configuration
- * @param ord how to determine a [Stick]'s distinguished [Point]
+ * @param ord how to determine a [Stick]'s head
  * @return [Stick]s generated by the end of the game,
  *      along with the number of moves required to generate the final stick
  */

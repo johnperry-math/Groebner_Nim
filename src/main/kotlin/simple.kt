@@ -137,6 +137,8 @@ fun new_game() {
 
 }
 
+@Suppress("Unused")
+@JsName("replay")
 fun replay() {
 
     game_context.game.reset_configuration(game_start)

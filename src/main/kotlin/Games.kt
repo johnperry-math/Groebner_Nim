@@ -151,7 +151,7 @@ class Groebner_Solitaire(
      *
      * compares [configuration] to [solution]. if [solution] is unknown at this time (default value)
      * then it computes it
-     * @param ord how to determine a [Stick]'s distinguished point
+     * @param ord how to determine a [Stick]'s head
      */
     @JsName("is_over")
     fun is_over(ord: Ordering): Boolean {
@@ -170,16 +170,16 @@ class Groebner_Solitaire(
     }
 
     /**
-     * minimizes [basis] by pruning [Stick]s whose distinguished term is redundant with another's
+     * minimizes [basis] by pruning [Stick]s whose head is redundant with another's
      * @param basis an [Iterable] collection of [Stick]s
-     * @param ord how to determine a [Stick]'s distinguished term
+     * @param ord how to determine a [Stick]'s head
      */
     @JsName("minimize")
     fun minimize(basis: Iterable<Stick>, ord: Ordering): HashSet<Stick> {
         val intermediate = basis.toHashSet()
         val result = HashSet<Stick>()
         for (f in intermediate)
-            if (!intermediate.any { it !== f && it.distinguished_point(ord).is_southwest_of(f.distinguished_point(ord)) })
+            if (!intermediate.any { it !== f && it.head(ord).is_southwest_of(f.head(ord)) })
                 result.add(f)
         return result
     }
@@ -190,7 +190,7 @@ class Groebner_Solitaire(
      * @param i first stick to combine
      * @param j second stick to combine
      * @param color color for a new stick, if generated
-     * @param ord how to determine a [Stick]'s distinguished point
+     * @param ord how to determine a [Stick]'s head
      */
     @JsName("move")
     fun move(i: Int, j: Int, color: String = default_color, ord: Ordering): Boolean {
@@ -222,7 +222,7 @@ class Groebner_Solitaire(
      * @param i first stick to combine
      * @param j second stick to combine
      * @param color color for a new stick, if generated
-     * @param ord how to determine a [Stick]'s distinguished point
+     * @param ord how to determine a [Stick]'s head
      */
     @JsName("perform_move")
     fun perform_move(i: Int, j: Int, color: String, ord: Ordering): Boolean {

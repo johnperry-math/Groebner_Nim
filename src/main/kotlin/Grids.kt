@@ -40,16 +40,16 @@ abstract class Grid(val game: Groebner_Solitaire, x_max: Int, y_max: Int) {
 
     /**
      * draws the gameboard
-     * @param ordering the ordering used to identify regions covered by distinguished points
+     * @param ordering the ordering used to identify regions covered by heads
      */
     @JsName("draw_grid")
     abstract fun draw_grid(ordering: Ordering = GrevLex_Ordering)
 
     /**
-     * draws a [Stick] according to a given color, identifying the distinguished [Point]
+     * draws a [Stick] according to a given color, distinguishing the head from the tail
      * @param s [Stick] to draw
      * @param color color to draw the [Stick]; use a 6-letter hex code like #000000
-     * @param ordering used to identify regions covered by distinguished [Point]s
+     * @param ordering used to identify regions covered by heads
      */
     @JsName("draw_stick")
     abstract fun draw_stick(s: Stick, color: String, ordering: Ordering = GrevLex_Ordering)
@@ -59,7 +59,7 @@ abstract class Grid(val game: Groebner_Solitaire, x_max: Int, y_max: Int) {
      *
      * the default implementation calls draw_stick on each [Stick], passing the corresponding
      * color known in [game].[Groebner_Solitaire.colors], and the ordering
-     * @param ordering the ordering used to identify regions covered by distinguished points
+     * @param ordering the ordering used to identify regions covered by heads
      */
     @JsName("draw_sticks")
     open fun draw_sticks(ordering: Ordering = GrevLex_Ordering) {
@@ -179,9 +179,9 @@ data class JS_Grid(
         val q_x = offset_x + (q.x * scale_x).toDouble()
         val q_y = canvas.height - offset_y - q.y * scale_y
 
-        // determine the distances for drawing distinguished and non-distinguished points
-        val r_small = min(0.125 * scale_x, 0.125 * scale_y)
-        val r_large = min(0.25 * scale_x, 0.25 * scale_y)
+        // determine the distances for drawing heads and tails
+        val r_tail = min(0.125 * scale_x, 0.125 * scale_y)
+        val r_head = min(0.25 * scale_x, 0.25 * scale_y)
 
         // colors we'll use to fill
         context.strokeStyle = color
@@ -198,14 +198,14 @@ data class JS_Grid(
 
         // draw p's dot
         context.beginPath()
-        var r: Double = if (ordering.preference(p, q) == p) r_large else r_small
+        var r: Double = if (ordering.preference(p, q) == p) r_head else r_tail
         context.arc(p_x, p_y, r, 0.0, 2 * PI)
         context.stroke()
         context.fill()
 
         // draw q's dot
         context.beginPath()
-        r = if (ordering.preference(p, q) == q) r_large else r_small
+        r = if (ordering.preference(p, q) == q) r_head else r_tail
         context.arc(q_x, q_y, r, 0.0, 2 * PI)
         context.stroke()
         context.fill()
@@ -230,7 +230,7 @@ data class JS_Grid(
                 val s = game.configuration[i]
                 val p = s.p
                 val q = s.q
-                // its distinguished point, adjusted for the canvas
+                // its head, adjusted for the canvas
                 val lm = if (ordering.preference(p, q) == p) p else q
                 val x = lm.x * scale_x + offset_x
                 val y = height - lm.y * scale_y - offset_y

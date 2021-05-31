@@ -1,11 +1,11 @@
-# Groebner_Nim
-An implementation of Groebner Nim in Kotlin/JS.
+# Gröbner Nim
+An implementation of Gröbner Nim in Kotlin/JS.
 
 ## Description
 
-Groebner Nim is a game that involves the production of sticks.
-It is named for [Groebner bases](https://en.wikipedia.org/wiki/Gr%C3%B6bner_basis),
-and by sheer coincidence simulates the computation of a Groebner basis over the modulo-2 field.
+Gröbner Nim is a game that involves the production of sticks.
+It is named for [Gröbner bases](https://en.wikipedia.org/wiki/Gr%C3%B6bner_basis),
+and by sheer coincidence simulates the computation of a Gröbner basis over the modulo-2 field.
 A full description appears [in a paper I wrote with Haley Dozier](http://dx.doi.org/10.4169/math.mag.89.4.235).
 You can find the game in action [here](http://www.math.usm.edu/perry/groebner-nim/),
 along with a summary of how to play, along with a couple of variants.
@@ -38,9 +38,9 @@ it isn't guaranteed to be suitable for any needs except my own, and even then I 
     After that, you should be able to access the following functions from JavaScript:
     `Groebner_Nim.random_game()`, `Groebner_Nim.level_zero_game()`, `Groebner_Nim.level_one_game()`, `Groebner_Nim.replay()`.
     The example page above invokes these when the user clicks a button; for instance,
-
-       <input type="button" value="Random" onclick="Groebner_Nim.random_game()">
-
+    ```javascript
+        <input type="button" value="Random" onclick="Groebner_Nim.random_game()">
+    ```
     ...but there are other ways to do it.
 
 ## Structure
@@ -61,7 +61,7 @@ There is also an example HTML page, `index.html`.
 Already linked, but [here it is again](http://www.math.usm.edu/perry/groebner-nim/).
 
 ## License
-<span xmlns:dct="http://purl.org/dc/terms/" property="dct:title">Groebner Nim</span> by
+<span xmlns:dct="http://purl.org/dc/terms/" property="dct:title">Gröbner Nim</span> by
 <a xmlns:cc="http://creativecommons.org/ns#" href="https://github.com/johnperry-math" property="cc:attributionName" rel="cc:attributionURL">
   John Perry</a>
 is licensed under a
