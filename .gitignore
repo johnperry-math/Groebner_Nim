@@ -1,0 +1,5 @@
+# Project exclude paths
+/.gradle/
+/build/
+/build/js/packages/Groebner_Nim/kotlin/
+/build/js/packages/Groebner_Nim-test/kotlin/
