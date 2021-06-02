@@ -1,3 +1,5 @@
+import kotlin.math.max
+
 /**
  * a position on the two-dimensional natural lattice at position ([x],[y])
  */
@@ -19,3 +21,5 @@ data class Point(val x: Int, val y: Int) {
     override fun toString(): String = "( $x , $y )"
 
 }
+
+fun lcm(a: Point, b: Point): Point = Point(max(a.x, b.x), max(a.y, b.y))

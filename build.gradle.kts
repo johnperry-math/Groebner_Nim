@@ -27,6 +27,7 @@ kotlin {
                 keep("Groebner_Nim.level_one_game")
                 keep("Groebner_Nim.random_game")
                 keep("Groebner_Nim.replay")
+                keep("Groebner_Nim.restore_seed")
             }
         }
     }

@@ -24,7 +24,7 @@ it isn't guaranteed to be suitable for any needs except my own, and even then I 
   * Copy these files to the folder where your HTML source code resides.
 
   * In the HTML file, create a canvas element. The example linked above uses dimensions of 600&times;600.
-       * For now it is essential to give the ID `game_canvas` to the canvas element; that is, <canvas id="game_canvas" ...>.
+       * For now, it is essential to give the ID `game_canvas` to the canvas element; that is, `<canvas id="game_canvas" ...>`.
 
   * At the beginning of the HTML file, preferably in the header, add the following line:
 

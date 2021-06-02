@@ -157,7 +157,7 @@ class Groebner_Solitaire(
     fun is_over(ord: Ordering): Boolean {
         // generate solution if not already known
         if (solution.isEmpty()) {
-            val compute_data = basis(configuration, ord)
+            val compute_data = buchberger_basis(configuration, ord)
             _solution = minimize(compute_data.first, ord)
             _num_moves = compute_data.second
             console.log("solution:")

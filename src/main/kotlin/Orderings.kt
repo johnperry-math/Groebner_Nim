@@ -43,8 +43,8 @@ object Lex_Ordering : Ordering() {
  */
 object Weighted_GrevLex : Ordering() {
 
-    var w_x: Int = 1
-    var w_y: Int = 1
+    private var w_x: Int = 1
+    private var w_y: Int = 1
 
     override fun preference(p1: Point, p2: Point): Point {
         val x1 = p1.x * w_x
@@ -59,6 +59,12 @@ object Weighted_GrevLex : Ordering() {
                 else if (x1 + y1 > x2 + y2) p1    // first weight larger
                 else p2                           // first weight equal or smaller
                 )
+    }
+
+    fun set_weight(x_weight: Int, y_weight: Int) {
+        require(x_weight >= 0 && y_weight >= 0)
+        w_x = x_weight
+        w_y = y_weight
     }
 
 }

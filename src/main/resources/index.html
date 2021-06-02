@@ -7,12 +7,14 @@
 <body>
 <div id="root">
     <canvas id="game_canvas" width="800" height="600"></canvas>
-    <script src="Groebner_Nim.js"></script>
     <p></p>
     <input type="button" value="Random" onclick="Groebner_Nim.random_game()">
     <input type="button" value="Level 0" onclick="Groebner_Nim.level_zero_game()">
     <input type="button" value="Level 1" onclick="Groebner_Nim.level_one_game()">
     <input type="button" value="Replay" onclick="Groebner_Nim.replay()">
+    <label for="seed_display">Game #</label>
+    <input type="number" id="seed_display" size="8em" value="0" onchange="Groebner_Nim.restore_seed(this.value)">
+    <script src="Groebner_Nim.js"></script>
 </div>
 </body>
 </html>

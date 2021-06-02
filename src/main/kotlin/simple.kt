@@ -1,6 +1,7 @@
 import kotlinx.browser.document
 import kotlinx.browser.window
 import org.w3c.dom.HTMLCanvasElement
+import org.w3c.dom.HTMLInputElement
 import org.w3c.dom.TouchEvent
 import org.w3c.dom.events.Event
 import org.w3c.dom.events.EventListener
@@ -15,6 +16,9 @@ const val stick_color: String = "#000000"
 const val solution_color: String = "#0000ff"
 /** color of a stick that is inactive once the solution is discovered */
 const val inactive_color: String = "#aaaaaa80"
+
+/** randomizer for games, reassign to determine seed */
+var game_randomizer : Random = Random
 
 /**
  *  how far the x-values should extend from 0
@@ -62,14 +66,14 @@ fun get_game_context(): JS_Game = game_context
  * @param max_y the largest possible y-value allowed for the Stick
  */
 fun random_stick(max_x: Int = window_x, max_y: Int = window_y): Stick {
-    val x1 = Random.nextInt(max_x)
-    val y1 = Random.nextInt(max_y)
+    val x1 = game_randomizer.nextInt(max_x)
+    val y1 = game_randomizer.nextInt(max_y)
     var x2 = x1
     var y2 = y1
     // make sure the points aren't the same
     while (x1 == x2 && y1 == y2) {
-        x2 = Random.nextInt(max_x)
-        y2 = Random.nextInt(max_y)
+        x2 = game_randomizer.nextInt(max_x)
+        y2 = game_randomizer.nextInt(max_y)
     }
     return Stick(x1, y1, x2, y2)
 }
@@ -129,14 +133,51 @@ fun released(e: Event) {
 
 }
 
+var fresh_game_needed = true
+
+@Suppress("Unused")
+@JsName("restore_seed")
+fun restore_seed(seed: Int) {
+    game_randomizer = Random(seed)
+    fresh_game_needed = false
+}
+
+/**
+ * initializes [game_randomizer] to a new [seed] and restarts the game
+ */
+@Suppress("Unused")
+@JsName("show_new_seed")
+fun show_new_seed(seed: Int) {
+    fresh_game_needed = true
+    val seed_display = document.getElementById("seed_display") as HTMLInputElement
+    seed_display.value = seed.toString()
+}
+
+/**
+ *  tasks common for every new game, regardless of type
+ *
+ *  initializes [game], [game_context], and [num_moves],
+ *  then generates a new seed for the game
+ */
 fun new_game() {
 
     game = Groebner_Solitaire()
     game_context = JS_Game(game, JS_Grid(game, canvas, window_x, window_y))
     num_moves = 0
 
+    if (fresh_game_needed) {
+        val seed = game_randomizer.nextInt()
+        game_randomizer = Random(seed)
+        show_new_seed(seed)
+    } else {
+        val seed_display = document.getElementById("seed_display") as HTMLInputElement
+        val seed = seed_display.value.toInt()
+        show_new_seed(seed)
+    }
+
 }
 
+/** replays previous game */
 @Suppress("Unused")
 @JsName("replay")
 fun replay() {
@@ -147,19 +188,22 @@ fun replay() {
 
 }
 
+/**
+ * a level zero game consists of a horizontal stick and a vertical stick
+ */
 @Suppress("Unused")
 @JsName("level_zero_game")
 fun level_zero_game() {
 
     new_game()
 
-    val a  = Random.nextInt(window_y / 2)
-    val b = a + Random.nextInt(window_y / 2) + 1
+    val a  = game_randomizer.nextInt(window_y / 2)
+    val b = a + game_randomizer.nextInt(window_y / 2) + 1
     game.add_stick(Stick(Point(0,a), Point(0,b)), stick_color)
 
-    val c = Random.nextInt(window_x / 2)
-    val d  = c + Random.nextInt(window_y / 2) + 1
-    val e = if (Random.nextBoolean()) 0 else Random.nextInt(window_y)
+    val c = game_randomizer.nextInt(window_x / 2)
+    val d  = c + game_randomizer.nextInt(window_y / 2) + 1
+    val e = if (game_randomizer.nextBoolean()) 0 else game_randomizer.nextInt(window_y)
     game.add_stick(Stick(Point(c,e), Point(d,e)), stick_color)
 
     game_start = game.configuration
@@ -171,23 +215,26 @@ fun level_zero_game() {
 
 }
 
+/**
+ * a level one game consists of a vertical stick and a diagonal stick
+ */
 @Suppress("Unused")
 @JsName("level_one_game")
 fun level_one_game() {
 
     new_game()
 
-    val a  = Random.nextInt(5)
-    val b1 = Random.nextInt(window_y)
-    val b2 = b1 + Random.nextInt(window_y) + 1
+    val a  = game_randomizer.nextInt(5)
+    val b1 = game_randomizer.nextInt(window_y)
+    val b2 = b1 + game_randomizer.nextInt(window_y) + 1
     game.add_stick(Stick(Point(a,b1), Point(a,b2)), stick_color)
 
-    var c = Random.nextInt(window_x)
-    while (c <= a) c = Random.nextInt(window_x)
-    var d  = Random.nextInt(window_y)
-    while (d == c) d = Random.nextInt(window_y)
-    var e = c + Random.nextInt(window_x) + 1
-    while (e == a) e = c + Random.nextInt(window_x) + 1
+    var c = game_randomizer.nextInt(window_x)
+    while (c <= a) c = game_randomizer.nextInt(window_x)
+    var d  = game_randomizer.nextInt(window_y)
+    while (d == c) d = game_randomizer.nextInt(window_y)
+    var e = c + game_randomizer.nextInt(window_x) + 1
+    while (e == a) e = c + game_randomizer.nextInt(window_x) + 1
     val f = b2 - b1 + d
     val max_x = max(window_x, e)
     val max_y = max(max(window_y, b2), f)
@@ -205,6 +252,7 @@ fun level_one_game() {
  */
 fun random_game() {
 
+    console.log("random game")
     new_game()
 
     game.add_stick(random_stick(), stick_color)
@@ -213,13 +261,17 @@ fun random_game() {
 
     game_start = game.configuration
 
-    //console.log("basis is ${game.minimize(basis(game.configuration, GrevLex_Ordering), GrevLex_Ordering)}")
-
     // draw the initial setup
     game_context.grid.draw(GrevLex_Ordering)
 
+//    console.log("${game.configuration.size} sticks")
+//    for (s in game.configuration) {
+//        console.log("\t${s}")
+//    }
+
 }
 
+/** startup: initializes event listeners for [canvas] and starts a new [random_game] */
 fun main() {
 
     // add event listeners
