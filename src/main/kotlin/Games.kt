@@ -1,3 +1,8 @@
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
 /**
  * a game of Groebner Solitaire
  * @property ord the term ordering to use during the game; this can change, making for a dynamic game
@@ -33,6 +38,13 @@ class Groebner_Solitaire(
     // which Stick in configuration is currently selected
     private var currently_selected: Int = -1
 
+    // default & reset value for new_stick
+    private val zero_stick = Stick(Point(0,0), Point(0,0))
+    // when a new stick is created, we temporarily store it here
+    private var new_stick = zero_stick
+    // the new stick's color
+    private var new_stick_color = stick_color
+
     /** returns true if and only if a stick is currently selected for pairing */
     fun stick_is_selected(): Boolean = currently_selected != -1
     /** returns true if and only if the indicated stick is a highlighted, possible pairing */
@@ -53,6 +65,7 @@ class Groebner_Solitaire(
     /** sets the configuration to the indicated value */
     fun reset_configuration(to: List<Stick>) {
         _configuration.clear()
+        new_stick = zero_stick
         for (s in to) _configuration.add(s)
         previous_moves.clear()
         currently_selected = -1
@@ -70,8 +83,8 @@ class Groebner_Solitaire(
     }
 
     /** adds [s] to the game, with the given [color] */
-    fun add_stick(s: Stick, color: String = default_color) {
-        if (s !in configuration) {
+    fun add_stick(s: Stick = new_stick, color: String = new_stick_color) {
+        if (s !in configuration && (s.p != s.q)) {
             _configuration.add(s)
             colors.add(color)
             old_colors.add(color)
@@ -82,10 +95,16 @@ class Groebner_Solitaire(
 
     /**
      * selects [Stick] [i] from [configuration]; if it is the second in a pair, performs a move
+     *
+     * when applicable, animates the creation of a new stick
      * @param color assigned when a new [Stick] is generated
+     * @param grid where to draw the animation
      * @see [perform_move]
      */
-    fun select_stick(i: Int, color: String = default_color) {
+    fun select_stick(i: Int, color: String = default_color, grid: Grid) {
+
+        // number of frames in a turn's animation
+        var frames_generated = 0
 
         // no point doing anything if i isn't a valid choice
         if (i in selected.indices) {
@@ -118,7 +137,7 @@ class Groebner_Solitaire(
 
                     if (colors[i] == pair_color) { // only allow unconsidered pairs
                         // add new stick
-                        perform_move(currently_selected, i, color, ord)
+                        frames_generated = perform_move(currently_selected, i, color, ord, grid)
                         // update considered pairs
                         previous_moves.add(Pair(currently_selected, i))
                         // unselect everything
@@ -144,6 +163,15 @@ class Groebner_Solitaire(
             }
 
         }
+
+        // postpone cleanup in order to allow launched animations to complete
+        val scope = CoroutineScope(Dispatchers.Default)
+        scope.launch {
+            console.log("waiting ${frames_generated * 50} to cleanup")
+            delay(frames_generated.toLong() * 50)
+            cleanup_select_stick()
+        }
+
     }
 
     /**
@@ -171,6 +199,7 @@ class Groebner_Solitaire(
 
     /**
      * minimizes [basis] by pruning [Stick]s whose head is redundant with another's
+     * and replacing [Stick]s whose tail is redundant by another's with a reduced version of itself
      * @param basis an [Iterable] collection of [Stick]s
      * @param ord how to determine a [Stick]'s head
      */
@@ -178,22 +207,33 @@ class Groebner_Solitaire(
     fun minimize(basis: Iterable<Stick>, ord: Ordering): HashSet<Stick> {
         val intermediate = basis.toHashSet()
         val result = HashSet<Stick>()
-        for (f in intermediate)
-            if (!intermediate.any { it !== f && it.head(ord).is_southwest_of(f.head(ord)) })
-                result.add(f)
+        for (f in intermediate) {
+            val t = f.head(ord)
+            if (!intermediate.any { it !== f && it.head(ord).is_southwest_of(t) }) {
+                val u = if (f.p == t) f.q else f.p
+                if (!intermediate.any { it !== f && it.head(ord).is_southwest_of(u) })
+                    result.add(f)
+                else {
+                    val reducer = intermediate.find { it !== f && it.head(ord).is_southwest_of(u) }!!
+                    result.add(Stick(t, reducer.tail(ord)))
+                }
+            }
+        }
         return result
     }
 
     /**
      * combines two [Stick]s that have not been combined before (does not check for this!)
-     * and adds if only if it is a legitimate stick
+     * and adds if only if it is a legitimate stick; also animates the move
      * @param i first stick to combine
      * @param j second stick to combine
      * @param color color for a new stick, if generated
      * @param ord how to determine a [Stick]'s head
+     * @param grid where to draw a performed move
+     * @return number of keyframes in the move's animation
      */
     @JsName("move")
-    fun move(i: Int, j: Int, color: String = default_color, ord: Ordering): Boolean {
+    fun move(i: Int, j: Int, color: String = default_color, ord: Ordering, grid: Grid): Int {
 
         // some caution is in order
         require(i >= 0 && i < configuration.size)
@@ -203,32 +243,39 @@ class Groebner_Solitaire(
         // record the move
         previous_moves.add(Pair(i,j))
         // generate a new stick
-        var result = new_stick(configuration[i], configuration[j], ord)
+        val (lcm, result) = new_stick(configuration[i], configuration[j], ord)
+        grid.animate_meeting(
+            configuration[i], configuration[j],
+            configuration[i].head(ord), configuration[j].head(ord), lcm,
+            ord
+        )
         // reduce it modulo the others
-        result = reduce(result, configuration, ord)
+        val (time, poly) = reduce(result, configuration, ord, grid)
         // if it's still new, add it; either way, report accordingly
-        return if (result.p != result.q) {
-            add_stick(result, color)
-            true
-        } else {
-            false
+        if (poly.p != poly.q) {
+            //add_stick(poly, color)
+            new_stick = poly
+            new_stick_color = color
         }
+        return time
     }
 
     /**
-     * checks that the requested move has not been made, then performs it
+     * checks that the requested move has not been made, then performs and animates it
      *
      * in reality, after checking that the move has not been made, it passes the data to [move]
      * @param i first stick to combine
      * @param j second stick to combine
      * @param color color for a new stick, if generated
      * @param ord how to determine a [Stick]'s head
+     * @param grid where to draw a performed move
+     * @return number of keyframes in move's animation
      */
     @JsName("perform_move")
-    fun perform_move(i: Int, j: Int, color: String, ord: Ordering): Boolean {
+    fun perform_move(i: Int, j: Int, color: String, ord: Ordering, grid: Grid): Int {
         return (
-                if (Pair(i, j) in previous_moves || Pair(j, i) in previous_moves) false
-                else return move(i, j, color, ord)
+                if (Pair(i, j) in previous_moves || Pair(j, i) in previous_moves) 0
+                else return move(i, j, color, ord, grid)
         )
     }
 

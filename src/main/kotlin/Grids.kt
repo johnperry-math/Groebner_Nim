@@ -1,3 +1,4 @@
+import kotlinx.coroutines.*
 import org.w3c.dom.CanvasRenderingContext2D
 import org.w3c.dom.HTMLCanvasElement
 import kotlin.math.*
@@ -16,22 +17,23 @@ abstract class Grid(val game: Groebner_Solitaire, x_max: Int, y_max: Int) {
     open val height: Double = 0.0
 
     // data related to drawing onto the grid; names not quite so self-explanatory
-    // multiple for grid / integer values to canvas / double values
+    /** multiple for grid / integer values to canvas / double values */
     open var scale_x: Int = 0
     open var scale_y: Int = 0
-    // offset from the canvas' leftmost and bottommost edges,
-    // giving room to breathe so that points are clearly visible even there
+    /** offset from the canvas' leftmost and bottommost edges,
+     * giving room to breathe so that points are clearly visible even there
+     */
     open var offset_x: Double = 0.0
     open var offset_y: Double = 0.0
 
-    // largest x value on the grid
+    /** largest x value on the grid */
     open var max_x: Int = x_max
         set(value) {
             field = value
             scale_x = canvas.width / max_x
         }
 
-    // largest y value on the grid
+    /** largest y value on the grid */
     open var max_y: Int = y_max
         set(value) {
             field = value
@@ -46,13 +48,35 @@ abstract class Grid(val game: Groebner_Solitaire, x_max: Int, y_max: Int) {
     abstract fun draw_grid(ordering: Ordering = GrevLex_Ordering)
 
     /**
+     * draws an intermediate stick of an animated move
+     *
+     * this can also draw a non-intermediate stick of a configuration
+     * @param s the [Stick] to draw
+     * @param Δ how far [s] has traveled from its initial position
+     * @param color the color to assign [s]
+     * @param ordering how to distinguish [s]' head
+     */
+    @JsName("draw_intermediate_stick")
+    abstract fun draw_intermediate_stick(
+        s: Stick,
+        Δ: Pair<Double, Double>,
+        color: String,
+        ordering: Ordering = GrevLex_Ordering
+    )
+
+    /**
      * draws a [Stick] according to a given color, distinguishing the head from the tail
+     *
+     * calls [draw_intermediate_stick] with parameter Δ = 0
      * @param s [Stick] to draw
      * @param color color to draw the [Stick]; use a 6-letter hex code like #000000
      * @param ordering used to identify regions covered by heads
+     * @see draw_intermediate_stick
      */
     @JsName("draw_stick")
-    abstract fun draw_stick(s: Stick, color: String, ordering: Ordering = GrevLex_Ordering)
+    open fun draw_stick(s: Stick, color: String, ordering: Ordering = GrevLex_Ordering) {
+        draw_intermediate_stick(s, Pair(0.0, 0.0), color, ordering)
+    }
 
     /**
      * draws all the sticks relevant to the game
@@ -118,7 +142,6 @@ abstract class Grid(val game: Groebner_Solitaire, x_max: Int, y_max: Int) {
         return -1
     }
 
-
     /**
      * sets the window to display the indicated number of x- and y-values
      *
@@ -132,6 +155,69 @@ abstract class Grid(val game: Groebner_Solitaire, x_max: Int, y_max: Int) {
         scale_y = canvas.height / (max_y + 1)
         offset_x = scale_x.toDouble() / 2
         offset_y = scale_y.toDouble() / 2
+    }
+
+    /**
+     * draws the grid after [delay] milliseconds, adding intermediate sticks
+     * @see [draw_intermediate_stick]
+     * @param first one of the sticks involved
+     * @param second the other stick involved
+     * @param first_Δ how far [first] has to travel to arrive at the meeting point
+     * @param second_Δ how far [second] has to travel to arrive at the meeting point
+     * @param how_far how far along the route [first] and [second] have gotten so far
+     * @param ord the method of distinguishing a [Stick]'s head
+     * @param delay how long to delay the start of the animation
+     * @param color color of the [Stick]s during the animation
+     */
+    @JsName("draw_with_intermediate_sticks")
+    open fun draw_with_intermediate_sticks(
+        first: Stick, second: Stick,
+        meeting_at: Point,
+        first_Δ: Pair<Double, Double>, second_Δ: Pair<Double, Double>,
+        color: String,
+        how_far: Int,
+        delay: Int,
+        ord: Ordering
+    ) {
+        val scope = CoroutineScope(Dispatchers.Default)
+        scope.launch {
+            delay(delay.toLong())
+            draw(ord)
+            draw_intermediate_stick(first, Pair(first_Δ.first / 20 * how_far, first_Δ.second / 20 * how_far), color, ord)
+            draw_intermediate_stick(second, Pair(second_Δ.first / 20 * how_far, second_Δ.second / 20 * how_far), color, ord)
+        }
+    }
+
+    /**
+     *  animate the meeting of the given [Stick]s
+     *
+     *  this does not assume that the sticks meet
+     *  @param first one of the sticks involved
+     *  @param second the other stick involved
+     *  @param first_source the source [Point] of [first] that gives us [where]
+     *  @param second_source the source [Point] of [second] that gives us [where]
+     *  @param where the point where [first] and [second] are to meet
+     *  @param ord the method of distinguishing a [Stick]'s head
+     *  @param delay how long to delay the start of the animation
+     *  @param color color of the [Stick]s during the animation
+     */
+    @JsName("animate_meeting")
+    open fun animate_meeting(
+        first: Stick, second: Stick,
+        first_source: Point, second_source: Point,
+        where: Point,
+        ord: Ordering,
+        delay: Int = 0,
+        color: String = animation_color
+    ) {
+        val first_Δ = Pair((where.x - first_source.x).toDouble(), (where.y - first_source.y).toDouble())
+        val second_Δ = Pair((where.x - second_source.x).toDouble(), (where.y - second_source.y).toDouble())
+        val check_x = max(max(max(max_x, where.x), first.tail(ord).x + first_Δ.first.toInt()), second.tail(ord).x + second_Δ.first.toInt())
+        val check_y = max(max(max(max_y, where.y), first.tail(ord).y + first_Δ.second.toInt()), second.tail(ord).y + second_Δ.second.toInt())
+        set_window(check_x, check_y)
+        for (i in 1..20) {
+            draw_with_intermediate_sticks(first, second, where, first_Δ, second_Δ, color, i, delay + i * 50, ord)
+        }
     }
 
 }
@@ -169,15 +255,19 @@ data class JS_Grid(
         set_window(max_x, max_y)
     }
 
-    override fun draw_stick(s: Stick, color: String, ordering: Ordering) {
+    override fun draw_intermediate_stick(
+        s: Stick,
+        Δ: Pair<Double, Double>,
+        color: String, ordering: Ordering
+    ) {
 
         // get sticks and their coordinates
         val p = s.p
         val q = s.q
-        val p_x = offset_x + (p.x * scale_x).toDouble()
-        val p_y = canvas.height - offset_y - p.y * scale_y
-        val q_x = offset_x + (q.x * scale_x).toDouble()
-        val q_y = canvas.height - offset_y - q.y * scale_y
+        val p_x = offset_x + ((p.x + Δ.first) * scale_x)
+        val p_y = canvas.height - offset_y - (p.y + Δ.second) * scale_y
+        val q_x = offset_x + ((q.x + Δ.first) * scale_x)
+        val q_y = canvas.height - offset_y - (q.y + Δ.second) * scale_y
 
         // determine the distances for drawing heads and tails
         val r_tail = min(0.125 * scale_x, 0.125 * scale_y)

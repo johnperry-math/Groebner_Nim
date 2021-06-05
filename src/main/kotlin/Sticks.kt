@@ -19,10 +19,17 @@ data class Stick(private val _p: Point, private val _q: Point) {
 
     /**
      * determines the head according to the given ordering
-     * @see [ord].[Ordering.preference]
+     * @see [Ordering.preference]
      * @param ord how to identify the head
      */
     fun head(ord: Ordering = GrevLex_Ordering) = ord.preference(p, q)
+
+    /**
+     * determines the tail according to the given ordering
+     * @see [Ordering.preference]
+     * @param ord how to identify the head (and thus the tail)
+     */
+    fun tail(ord: Ordering = GrevLex_Ordering) = if (ord.preference(p, q) == p) q else p
 
     /**
      * overrides the dollar-sign operator to display "[ P ; Q ]"
@@ -50,13 +57,13 @@ data class Stick(private val _p: Point, private val _q: Point) {
 }
 
 /**
- * creates a new [Stick] by moving the given sticks rightwards or upwards
- * until their heads meet, then returns the tails
+ * creates a new [Stick] by moving the given sticks east or north
+ * until the heads of [s1] and [s2] meet, then returns a [Stick] formed from their tails
  * @param s1 first [Stick] to combine
  * @param s2 second [Stick] to combine
  * @param ord how to determine a head
  */
-fun new_stick(s1: Stick, s2: Stick, ord: Ordering): Stick {
+fun new_stick(s1: Stick, s2: Stick, ord: Ordering): Pair<Point, Stick> {
 
     // determine head (h) and tail (t) points
     val (h1, t1) = if (s1.head(ord) == s1.p) Pair(s1.p, s1.q) else Pair(s1.q, s1.p)
@@ -67,23 +74,26 @@ fun new_stick(s1: Stick, s2: Stick, ord: Ordering): Stick {
     val u1 = Point(lcm.x - h1.x, lcm.y - h1.y)
     val u2 = Point(lcm.x - h2.x, lcm.y - h2.y)
     // join the tails
-    return Stick( Point(t1.x + u1.x, t1.y + u1.y), Point(t2.x + u2.x, t2.y + u2.y) )
+    return Pair(lcm, Stick( Point(t1.x + u1.x, t1.y + u1.y), Point(t2.x + u2.x, t2.y + u2.y) ))
 
 }
 
 /**
- * reduce a given [Stick] by an [Iterable] of [Stick]s, according to an [Ordering]
+ * reduce a given [Stick] by an [Iterable] of [Stick]s, according to an [Ordering],
+ * and animates it when [grid] is not null
  *
  * whenever a head of [by] is southwest of either of [stick]'s points,
  * we move that reducer to meet [stick]'s said point, then combine the remaining points.
  * @param stick the stick to reduce
  * @param by [Stick]s to reduce by
  * @param ord how to determine a [Stick]'s head
+ * @param grid where to draw the animation of the reduction process
  */
-fun reduce(stick: Stick, by: Iterable<Stick>, ord: Ordering): Stick {
+fun reduce(stick: Stick, by: Iterable<Stick>, ord: Ordering, grid: Grid? = null): Pair<Int, Stick> {
 
     // start with input
     var result = stick
+    var offset = 21
 
     do {
 
@@ -102,53 +112,72 @@ fun reduce(stick: Stick, by: Iterable<Stick>, ord: Ordering): Stick {
         }
         if (reducer == null) break // no reducer found
         else { // we have a reducer!
+            val w = if (reduce_head) result.p else result.q
             val t = reducer.head(ord)
-            val u = if (reduce_head) Point(result.p.x - t.x, result.p.y - t.y)
-                    else Point(result.q.x - t.x, result.q.y - t.y)
+            val u = Point(w.x - t.x, w.y - t.y)
             val v = if (t === reducer.p) reducer.q else reducer.p
+            grid?.animate_meeting( result, reducer, w, t, w, ord, offset * 50 )
+            offset += 20
             result = if (reduce_head) Stick( result.q , u + v ) else Stick( result.p , u + v )
         }
 
     } while (true)
 
-    return result
+    return Pair(offset, result)
     
 }
 
 /**
- * remove the pairs that correspond to elements whose heads
- * lie on opposite axes; in the context of Groebner bases, this is sometimes
- * called Buchberger's first criterion, or, Buchberger's gcd criterion
+ * remove the pairs that correspond to elements whose heads lie on opposite axes;
+ * in the context of Groebner bases, this is sometimes called Buchberger's first criterion,
+ * or, Buchberger's gcd criterion
  * @param pairs a list of paired elements of [basis]
  * @param basis a list of [Stick]s that defines a basis of the game
  * @param ord how we determine a [Stick]'s head
  */
 fun prune_gcd(pairs: ArrayList<Pair<Int, Int>>, basis: List<Stick>, ord: Ordering) {
+    // b1_pairs will hold the pairs that satisfy the gcd criterion
     val b1_pairs = HashSet<Pair<Int, Int>>()
+    // pass through all the pairs, adding the ones that are on different axes to b1_pairs
     for (p in pairs) {
         val t1 = basis[p.first].head(ord)
         val t2 = basis[p.second].head(ord)
         if ( (t1.x == 0 && t2.y == 0) || (t1.y == 0 && t2.x == 0) ) {
             b1_pairs.add(p)
-            console.log("b1 pruned ${p.first}, ${p.second}")
+//            console.log("b1 pruned ${p.first}, ${p.second}")
         }
     }
     pairs.removeAll(b1_pairs)
 }
 
+/**
+ * remove the pairs that correspond to elements whose heads are northeast
+ * of two previously-considered pairs;
+ * in the context of Groebner bases, this is sometimes called Buchberger's second criterion,
+ * or, Buchberger's lcm criterion
+ * @param pairs a list of paired elements of [basis]
+ * @param basis a list of [Stick]s that defines a basis of the game
+ * @param ord how we determine a [Stick]'s head
+ */
 fun prune_lcm(
         pairs: ArrayList<Pair<Int, Int>>,
         basis: List<Stick>,
         considered_pairs: Set<Pair<Int, Int>>,
         ord: Ordering
 ) {
+    // b2_pairs will hold the pairs that satisfy the lcm criterion
     val b2_pairs = HashSet<Pair<Int, Int>>()
+    // pass through all the pairs,
+    // adding the ones that are northeast of a previously considered pair to b2_pairs
     for (p in pairs) {
+        // determine p's meeting position
         val i = p.first
         val j = p.second
         val t1 = basis[i].head(ord)
         val t2 = basis[j].head(ord)
         val t12 = Point( max(t1.x, t2.x) , max(t1.y, t2.y) )
+        // now look for two pairs that (a) have been considered, and
+        // (b) whose meetings lie southwest of p's meeting location
         for (k in basis.indices) {
             val u = basis[k].head(ord)
             if (
@@ -157,7 +186,7 @@ fun prune_lcm(
                 && (Pair(j,k) in considered_pairs || Pair(k,j) in considered_pairs)
             ) {
                 b2_pairs.add(p)
-                console.log("b2 pruned ${p.first}, ${p.second}")
+//                console.log("b2 pruned ${p.first}, ${p.second}")
             }
         }
     }
@@ -207,12 +236,14 @@ fun pair_comparison(
 /**
  * compute a solution to a game of Groebner_Nim
  *
- * technically, this is computing a Groebner basis of a polynomial ideal
+ * technically, this is computing a Groebner basis of a polynomial ideal.
+ * note that the result is not minimized
  *
  * @param input the initial configuration
  * @param ord how to determine a [Stick]'s head
  * @return [Stick]s generated by the end of the game,
  *      along with the number of moves required to generate the final stick
+ * @see [Groebner_Solitaire.minimize]
  */
 fun buchberger_basis(input: Iterable<Stick>, ord: Ordering): Pair<Set<Stick>, Int> {
 
@@ -236,17 +267,19 @@ fun buchberger_basis(input: Iterable<Stick>, ord: Ordering): Pair<Set<Stick>, In
     while (!unconsidered_pairs.isEmpty()) {
         ++number_computed
         val p = unconsidered_pairs.first()
-        console.log("$p")
         unconsidered_pairs.remove(p)
         considered_pairs.add(p)
-        var s = new_stick(intermediate[p.first], intermediate[p.second], ord)
-        s = reduce(s, intermediate, ord)
+        // we're not animating here, so throw away the number of frames
+        var (_, s) = new_stick(intermediate[p.first], intermediate[p.second], ord)
+        val (_, t) = reduce(s, intermediate, ord)
+        s = t
         if (s.p == s.q) // don't add a vanished stick to the basis!
             ++number_verified
         else {
             for (i in intermediate.indices)
                 unconsidered_pairs.add( Pair(i, intermediate.size) )
             intermediate.add(s)
+//            console.log("added $s")
             number_verified = 0
         }
         unconsidered_pairs.sortWith { a, b -> pair_comparison(a, b, intermediate, ord) }

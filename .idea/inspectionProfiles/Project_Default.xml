@@ -8,7 +8,7 @@
       <option name="namePattern" value="[a-z][A-Za-z_\d]*" />
     </inspection_tool>
     <inspection_tool class="LocalVariableName" enabled="true" level="WEAK WARNING" enabled_by_default="true">
-      <option name="namePattern" value="[a-zα-ω][A-Za-zα-ω_\d]*" />
+      <option name="namePattern" value="[a-zα-ω][A-Za-zα-ωΑ-Ω_\d]*" />
     </inspection_tool>
     <inspection_tool class="NonAsciiCharacters" enabled="true" level="WARNING" enabled_by_default="true">
       <option name="CHECK_FOR_NOT_ASCII_IDENTIFIER_NAME" value="false" />
