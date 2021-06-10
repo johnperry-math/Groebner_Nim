@@ -1,5 +1,6 @@
 plugins {
     kotlin("js") version "1.4.32"
+    id("org.jetbrains.dokka") version "1.4.32"
 }
 
 group = "me.cantanima"
@@ -16,6 +17,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core-js:1.5.0")
     implementation("io.ktor:ktor-client-core:1.6.0")
     implementation("io.ktor:ktor-client-js:1.6.0")
+    dokkaHtmlPlugin("org.jetbrains.dokka:kotlin-as-java-plugin:1.4.32")
 }
 
 kotlin {

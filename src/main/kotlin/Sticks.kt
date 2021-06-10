@@ -93,7 +93,7 @@ fun reduce(stick: Stick, by: Iterable<Stick>, ord: Ordering, grid: Grid? = null)
 
     // start with input
     var result = stick
-    var offset = 21
+    var offset = 2 * action_frames + pause_frames + 1
 
     do {
 
@@ -116,8 +116,8 @@ fun reduce(stick: Stick, by: Iterable<Stick>, ord: Ordering, grid: Grid? = null)
             val t = reducer.head(ord)
             val u = Point(w.x - t.x, w.y - t.y)
             val v = if (t === reducer.p) reducer.q else reducer.p
-            grid?.animate_meeting( result, reducer, w, t, w, ord, offset * 50 )
-            offset += 20
+            grid?.animate_meeting( result, reducer, w, t, w, ord, offset * frame_length )
+            offset += 2 * action_frames + pause_frames
             result = if (reduce_head) Stick( result.q , u + v ) else Stick( result.p , u + v )
         }
 

@@ -3,6 +3,13 @@ import org.w3c.dom.CanvasRenderingContext2D
 import org.w3c.dom.HTMLCanvasElement
 import kotlin.math.*
 
+/** number of milliseconds a frame should remain onscreen during an animation */
+const val frame_length = 50
+/** number of frames that an action should take (meeting or collapse of sticks) */
+const val action_frames = 20
+/** number of frames to pause between actions */
+const val pause_frames = 5
+
 /**
  * this abstract class encapsulates functionality common for various backends
  * @property game the [Groebner_Solitaire] game this grid depicts
@@ -55,13 +62,37 @@ abstract class Grid(val game: Groebner_Solitaire, x_max: Int, y_max: Int) {
      * @param Δ how far [s] has traveled from its initial position
      * @param color the color to assign [s]
      * @param ordering how to distinguish [s]' head
+     * @see [draw_intermediate_stick]
      */
     @JsName("draw_intermediate_stick")
-    abstract fun draw_intermediate_stick(
+    open fun draw_intermediate_stick(
         s: Stick,
         Δ: Pair<Double, Double>,
         color: String,
         ordering: Ordering = GrevLex_Ordering
+    ) {
+        draw_intermediate_stick(
+            s.p.x + Δ.first, s.p.y + Δ.second, // first point
+            s.q.x + Δ.first, s.q.y + Δ.second, // second point
+            color, ordering.preference(s.p, s.q) == s.p
+        )
+    }
+
+    /**
+     * draws an intermediate [Stick] of an animated move
+     *
+     * this can also draw a non-intermediate stick of a configuration
+     * @param x1 first point's x-value
+     * @param y1 first point's y-value
+     * @param x2 second point's x-value
+     * @param y2 second point's y-value
+     * @param color the color to assign the point
+     * @param highlight_first set to true iff (x1,y1) is the head
+     */
+    abstract fun draw_intermediate_stick(
+        x1: Double, y1: Double, x2: Double, y2: Double,
+        color: String,
+        highlight_first: Boolean
     )
 
     /**
@@ -158,7 +189,14 @@ abstract class Grid(val game: Groebner_Solitaire, x_max: Int, y_max: Int) {
     }
 
     /**
-     * draws the grid after [delay] milliseconds, adding intermediate sticks
+     * draws the grid with two new, intermediate sticks; see details
+     *
+     * draws the grid asynchronously after [delay] * [frame_length] milliseconds,
+     * along with all old sticks,
+     * adding intermediate sticks offset from [first] and [second].
+     * the offset is found by scaling [first_Δ] and [second_Δ], respectively,
+     * by the ratio [how_far] / [action_frames].
+     *
      * @see [draw_intermediate_stick]
      * @param first one of the sticks involved
      * @param second the other stick involved
@@ -172,7 +210,6 @@ abstract class Grid(val game: Groebner_Solitaire, x_max: Int, y_max: Int) {
     @JsName("draw_with_intermediate_sticks")
     open fun draw_with_intermediate_sticks(
         first: Stick, second: Stick,
-        meeting_at: Point,
         first_Δ: Pair<Double, Double>, second_Δ: Pair<Double, Double>,
         color: String,
         how_far: Int,
@@ -183,15 +220,76 @@ abstract class Grid(val game: Groebner_Solitaire, x_max: Int, y_max: Int) {
         scope.launch {
             delay(delay.toLong())
             draw(ord)
-            draw_intermediate_stick(first, Pair(first_Δ.first / 20 * how_far, first_Δ.second / 20 * how_far), color, ord)
-            draw_intermediate_stick(second, Pair(second_Δ.first / 20 * how_far, second_Δ.second / 20 * how_far), color, ord)
+            draw_intermediate_stick(
+                first,
+                Pair(first_Δ.first * how_far / action_frames, first_Δ.second * how_far / action_frames),
+                color, ord
+            )
+            draw_intermediate_stick(
+                second,
+                Pair(second_Δ.first * how_far / action_frames, second_Δ.second * how_far / action_frames),
+                color, ord
+            )
         }
     }
 
     /**
-     *  animate the meeting of the given [Stick]s
+     * draws the grid with two new, intermediate, collapsing sticks; see details
      *
-     *  this does not assume that the sticks meet
+     * draws the grid asynchronously after [delay] * [frame_length] milliseconds,
+     * along with all old sticks,
+     * adding two intermediate sticks formed from [first_fixed] and a third point,
+     * as well as [second_fixed] and a third point.
+     * the third point is determined by the formula (x or y) + [Δ].(x or y) * [how_far] / [action_frames].
+     * the general intent is that as [how_far] proceeds from 1 to [action_frames],
+     * these two sticks seem to collapse into one stick,
+     * with their meeting place moving from [from] to [from] offset by [Δ].
+     *
+     * @param first_fixed a fixed point, definitely drawn
+     * @param second_fixed a fixed point, definitely drawn
+     * @param from a point in motion, not drawn, but used to compute a third point that is drawn
+     * @param Δ how far [from] is supposed to travel, though it likely hasn't traveled that far yet
+     * @param how_far a number between 1 and [action_frames] inclusive, giving
+     */
+    open fun draw_with_collapsing_sticks(
+        first_fixed: Point, second_fixed: Point,
+        from: Point, Δ: Pair<Double, Double>, how_far: Int,
+        color: String, delay: Int, ord: Ordering
+    ) {
+        val scope = CoroutineScope(Dispatchers.Default)
+        scope.launch {
+            delay(delay.toLong())
+            draw(ord)
+            draw_intermediate_stick(
+                first_fixed.x.toDouble(), first_fixed.y.toDouble(),
+                from.x + Δ.first * how_far / action_frames, from.y + Δ.second * how_far / action_frames,
+                color, ord.preference(first_fixed, from) == first_fixed
+            )
+            draw_intermediate_stick(
+                second_fixed.x.toDouble(), second_fixed.y.toDouble(),
+
+                from.x + Δ.first * how_far / action_frames, from.y + Δ.second * how_far / action_frames,
+                color, ord.preference(second_fixed, from) == second_fixed
+            )
+        }
+    }
+
+    /**
+     *  animate the meeting of the given [Stick]s; see details
+     *
+     *  this first animates the motion of [first] and [second]
+     *  such that [first_source] and [second_source] come together at [where].
+     *  it also calls [set_window] to adjust the viewing area so that the entire animation is in view;
+     *  no [Stick]s should go offscreen.
+     *
+     *  subsequently, it animates the creation of a new [Stick], or the evaporation of same.
+     *
+     *  each frame remains on screen for [frame_length] milliseconds.
+     *  hence, use [delay] to put off the beginning of the animation
+     *  by [delay] * [frame_length] milliseconds.
+     *  you can also think of [delay] as the number of frames that have to take place
+     *  before this animation starts.
+     *
      *  @param first one of the sticks involved
      *  @param second the other stick involved
      *  @param first_source the source [Point] of [first] that gives us [where]
@@ -200,6 +298,9 @@ abstract class Grid(val game: Groebner_Solitaire, x_max: Int, y_max: Int) {
      *  @param ord the method of distinguishing a [Stick]'s head
      *  @param delay how long to delay the start of the animation
      *  @param color color of the [Stick]s during the animation
+     *  @see set_window
+     *  @see draw_with_intermediate_sticks
+     *  @see draw_with_collapsing_sticks
      */
     @JsName("animate_meeting")
     open fun animate_meeting(
@@ -215,8 +316,33 @@ abstract class Grid(val game: Groebner_Solitaire, x_max: Int, y_max: Int) {
         val check_x = max(max(max(max_x, where.x), first.tail(ord).x + first_Δ.first.toInt()), second.tail(ord).x + second_Δ.first.toInt())
         val check_y = max(max(max(max_y, where.y), first.tail(ord).y + first_Δ.second.toInt()), second.tail(ord).y + second_Δ.second.toInt())
         set_window(check_x, check_y)
-        for (i in 1..20) {
-            draw_with_intermediate_sticks(first, second, where, first_Δ, second_Δ, color, i, delay + i * 50, ord)
+        for (i in 1..action_frames) {
+            draw_with_intermediate_sticks(
+                first, second, first_Δ, second_Δ,
+                color, i, delay + i * frame_length, ord
+            )
+        }
+        // now determine where first and second have moved
+        val first_moved = Stick(
+            first.p.x + first_Δ.first.toInt() , first.p.y + first_Δ.second.toInt() ,
+            first.q.x + first_Δ.first.toInt() , first.q.y + first_Δ.second.toInt()
+        )
+        val second_moved = Stick(
+            second.p.x + second_Δ.first.toInt() , second.p.y + second_Δ.second.toInt() ,
+            second.q.x + second_Δ.first.toInt() , second.q.y + second_Δ.second.toInt()
+        )
+        // determine points of new stick
+        val first_tail = if (first_moved.p == where) first_moved.q else first_moved.p
+        val second_tail = if (second_moved.p == where) second_moved.q else second_moved.p
+        val midpoint = Pair(
+            ( first_tail.x + second_tail.x ).toDouble() / 2 ,
+            ( first_tail.y + second_tail.y ).toDouble() / 2
+        )
+        val third_Δ = Pair( ( midpoint.first - where.x ) , ( midpoint.second - where.y ) )
+        for (i in 1 .. action_frames) {
+            draw_with_collapsing_sticks(
+                first_tail, second_tail, where,
+                third_Δ, i, color, delay + (i + action_frames + pause_frames) * frame_length, ord)
         }
     }
 
@@ -256,18 +382,15 @@ data class JS_Grid(
     }
 
     override fun draw_intermediate_stick(
-        s: Stick,
-        Δ: Pair<Double, Double>,
-        color: String, ordering: Ordering
+        x1: Double, y1: Double, x2: Double, y2: Double,
+        color: String, highlight_first: Boolean
     ) {
 
         // get sticks and their coordinates
-        val p = s.p
-        val q = s.q
-        val p_x = offset_x + ((p.x + Δ.first) * scale_x)
-        val p_y = canvas.height - offset_y - (p.y + Δ.second) * scale_y
-        val q_x = offset_x + ((q.x + Δ.first) * scale_x)
-        val q_y = canvas.height - offset_y - (q.y + Δ.second) * scale_y
+        val p_x = offset_x + x1 * scale_x
+        val p_y = canvas.height - offset_y - y1 * scale_y
+        val q_x = offset_x + x2 * scale_x
+        val q_y = canvas.height - offset_y - y2 * scale_y
 
         // determine the distances for drawing heads and tails
         val r_tail = min(0.125 * scale_x, 0.125 * scale_y)
@@ -288,14 +411,14 @@ data class JS_Grid(
 
         // draw p's dot
         context.beginPath()
-        var r: Double = if (ordering.preference(p, q) == p) r_head else r_tail
+        var r: Double = if (highlight_first) r_head else r_tail
         context.arc(p_x, p_y, r, 0.0, 2 * PI)
         context.stroke()
         context.fill()
 
         // draw q's dot
         context.beginPath()
-        r = if (ordering.preference(p, q) == q) r_head else r_tail
+        r = if (highlight_first) r_tail else r_head
         context.arc(q_x, q_y, r, 0.0, 2 * PI)
         context.stroke()
         context.fill()

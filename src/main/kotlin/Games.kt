@@ -167,8 +167,8 @@ class Groebner_Solitaire(
         // postpone cleanup in order to allow launched animations to complete
         val scope = CoroutineScope(Dispatchers.Default)
         scope.launch {
-            console.log("waiting ${frames_generated * 50} to cleanup")
-            delay(frames_generated.toLong() * 50)
+            console.log("waiting ${frames_generated * frame_length} to cleanup")
+            delay(frames_generated.toLong() * frame_length)
             cleanup_select_stick()
         }
 
